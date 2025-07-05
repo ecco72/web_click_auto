@@ -42,14 +42,14 @@ class RecaptchaSolver:
         """
 
         try:
-            # Handle main reCAPTCHA iframe
+            # 先切換到主 iframe
             iframe = self.wait.until(
                 EC.presence_of_element_located(
                     (By.CSS_SELECTOR, "iframe[title*='reCAPTCHA']")
                 )
             )
             self.driver.switch_to.frame(iframe)
-            time.sleep(2)  # 給予更多時間讓元素載入
+            time.sleep(1)
 
             # Click the checkbox
             checkbox = self.wait.until(
@@ -62,16 +62,14 @@ class RecaptchaSolver:
                 return
 
             # Handle audio challenge
-            # 切換回主頁面
             self.driver.switch_to.default_content()
-            # 等待並切換到新的 reCAPTCHA iframe
             iframe = self.wait.until(
                 EC.presence_of_element_located(
                     (By.CSS_SELECTOR, "iframe[src*='recaptcha/api2/bframe']")
                 )
             )
             self.driver.switch_to.frame(iframe)
-            time.sleep(2)  # 給予更多時間讓元素載入
+            time.sleep(2)
 
             # Click the audio button
             audio_button = self.wait.until(
@@ -82,9 +80,9 @@ class RecaptchaSolver:
 
             # 確保按鈕可以點擊
             if not audio_button.is_displayed() or not audio_button.is_enabled():
-                time.sleep(2)  # 給予額外的等待時間
+                time.sleep(2)
 
-            # 使用 JavaScript 點擊（如果一般點擊失敗的話）
+            # 使用 JavaScript 點擊
             try:
                 audio_button.click()
             except Exception as e:
@@ -92,10 +90,31 @@ class RecaptchaSolver:
                 if self.log_callback:
                     self.log_callback(f"使用 JavaScript 點擊按鈕: {str(e)}")
 
-            time.sleep(0.3)
+            time.sleep(1)  # 給一點時間讓訊息出現
 
+            # 點擊語音按鈕後檢查是否出現"請稍後再試"
+            try:
+                # 檢查所有可能包含錯誤訊息的元素
+                error_texts = [
+                    "請稍後再試",
+                    "Try again later",
+                ]
+                page_text = self.driver.page_source
+                for error in error_texts:
+                    if error in page_text:
+                        if self.log_callback:
+                            self.log_callback(f"檢測到'{error}'訊息，跳過當前驗證")
+                        self.driver.switch_to.default_content()
+                        return
+            except:
+                pass  # 如果檢查過程出錯，繼續執行
+
+            # 如果沒有檢測到錯誤，繼續處理音頻驗證
             if self.is_detected():
-                raise Exception("Captcha detected bot behavior")
+                if self.log_callback:
+                    self.log_callback("檢測到機器人行為，跳過當前驗證")
+                self.driver.switch_to.default_content()
+                return
 
             # Download and process audio
             audio_source = self.wait.until(
@@ -124,12 +143,22 @@ class RecaptchaSolver:
                     return
                 time.sleep(1)
 
-        except Exception:
+        except Exception as e:
             self.driver.switch_to.default_content()
+            # 檢查異常訊息中是否包含關鍵字
+            if "請稍後再試" in str(e) or "請稍後再試" in self.driver.page_source:
+                if self.log_callback:
+                    self.log_callback("檢測到'請稍後再試'訊息，跳過當前驗證")
+                return
+            if self.log_callback:
+                self.log_callback(f"驗證碼處理發生錯誤: {str(e)}")
             raise
 
         finally:
-            self.driver.switch_to.default_content()
+            try:
+                self.driver.switch_to.default_content()
+            except:
+                pass
 
     def _process_audio_challenge(self, audio_url: str, max_retries: int = 3) -> str:
         """Process the audio challenge and return the recognized text."""

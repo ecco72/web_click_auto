@@ -11,13 +11,14 @@ import os
 import sys
 import threading
 from queue import Queue
+from start_web_click import start_web_click_and_press_start
 
 
 class RecaptchaBypassGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("web_click4 輔助工具")
-        self.root.geometry("500x400")
+        self.root.title("全自動輔助")
+        self.root.geometry("430x530")
         self.root.configure(bg="#f0f0f0")
 
         # 設定圖標
@@ -49,16 +50,6 @@ class RecaptchaBypassGUI:
             fg="#333333",
         )
         title_label.pack(pady=10)
-
-        # 說明文字
-        instruction = tk.Label(
-            self.main_frame,
-            text="請輸入Chrome偵錯端口，然後點擊開始執行",
-            font=("Arial", 10),
-            bg="#f0f0f0",
-            fg="#555555",
-        )
-        instruction.pack(pady=5)
 
         # 端口輸入區域
         input_frame = tk.Frame(self.main_frame, bg="#f0f0f0")
@@ -198,6 +189,9 @@ class RecaptchaBypassGUI:
         # 初始化消息隊列
         self.log_queue = Queue()
         self.status_update_queue = Queue()
+
+        # 添加自動啟動功能
+        self.auto_start()
 
     def log_message(self, message):
         import datetime
@@ -406,6 +400,41 @@ class RecaptchaBypassGUI:
             if self.log_callback:
                 self.queue_log_message(f"關閉驅動程式時出錯: {str(e)}")
         self.driver = None
+
+    def auto_start(self):
+        """自動啟動功能"""
+        try:
+            # 啟動一個新線程來執行 start_web_click_and_press_start
+            threading.Thread(target=self._auto_start_thread).start()
+        except Exception as e:
+            self.log_message(f"自動啟動過程中發生錯誤：{str(e)}")
+
+    def _auto_start_thread(self):
+        """在新線程中執行自動啟動邏輯"""
+        try:
+            self.log_message("正在啟動 web_click4 並等待端口...")
+            port = start_web_click_and_press_start()
+
+            if port:
+                self.log_message(f"成功獲取端口：{port}")
+                # 在主線程中更新 UI 和啟動監控
+                self.root.after(0, lambda: self._update_port_and_start(port))
+            else:
+                self.log_message("無法獲取端口，請手動輸入")
+        except Exception as e:
+            self.log_message(f"自動啟動失敗：{str(e)}")
+
+    def _update_port_and_start(self, port):
+        """更新端口輸入框並自動開始監控"""
+        try:
+            # 更新端口輸入框
+            self.port_entry.delete(0, tk.END)
+            self.port_entry.insert(0, str(port))
+
+            # 自動點擊開始按鈕
+            self.start_monitoring()
+        except Exception as e:
+            self.log_message(f"更新端口並啟動時發生錯誤：{str(e)}")
 
 
 def main():
