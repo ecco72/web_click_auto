@@ -5,7 +5,7 @@ import time
 from pywinauto import Desktop
 import pyautogui
 import tkinter as tk
-from tkinter import messagebox, scrolledtext
+from tkinter import messagebox, ttk
 import ctypes
 import os
 import sys
@@ -18,8 +18,19 @@ class RecaptchaBypassGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("全自動輔助")
-        self.root.geometry("430x530")
-        self.root.configure(bg="#f0f0f0")
+        self.root.geometry("450x550")
+        
+        # 定義主題顏色 - 更深沉的黑色主題
+        self.bg_color = "#121212"  # 深黑色背景
+        self.accent_color = "#1E1E1E"  # 次要背景色
+        self.text_color = "#E0E0E0"  # 淺灰白色文字
+        self.highlight_color = "#4D4D4D"  # 灰色強調色
+        self.success_color = "#2C7873"  # 深綠色成功按鈕
+        self.error_color = "#8B3A3A"  # 深紅色錯誤按鈕
+        self.hover_success = "#3A9A93"  # 懸停時的成功按鈕顏色
+        self.hover_error = "#A84747"  # 懸停時的錯誤按鈕顏色
+        
+        self.root.configure(bg=self.bg_color)
 
         # 設定圖標
         try:
@@ -37,53 +48,78 @@ class RecaptchaBypassGUI:
         except Exception as e:
             print(f"設定圖示時出錯: {e}")
 
+        # 設定ttk樣式 - 用於滾動條
+        self.style = ttk.Style()
+        self.style.theme_use('default')
+        
+        # 配置滾動條顏色 - 包括禁用狀態
+        self.style.configure("Dark.Vertical.TScrollbar", 
+                            background="#2a2a2a",
+                            arrowcolor=self.text_color,
+                            bordercolor=self.bg_color,
+                            troughcolor=self.bg_color,
+                            gripcount=0)
+        
+        # 設定禁用狀態的滾動條顏色
+        self.style.map("Dark.Vertical.TScrollbar",
+                      background=[("disabled", "#2a2a2a")],
+                      arrowcolor=[("disabled", "#555555")])
+        
         # 主框架
-        self.main_frame = tk.Frame(root, bg="#f0f0f0", padx=20, pady=20)
+        self.main_frame = tk.Frame(root, bg=self.bg_color, padx=20, pady=20)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # 標題
+        # 標題 - 改用白色文字
         title_label = tk.Label(
             self.main_frame,
-            text="Recaptcha 自動驗證工具",
-            font=("Arial", 16, "bold"),
-            bg="#f0f0f0",
-            fg="#333333",
+            text="全自動輔助",
+            font=("Arial", 18, "bold"),
+            bg=self.bg_color,
+            fg=self.text_color,
         )
         title_label.pack(pady=10)
 
         # 端口輸入區域
-        input_frame = tk.Frame(self.main_frame, bg="#f0f0f0")
-        input_frame.pack(fill=tk.X, pady=10)
+        input_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        input_frame.pack(fill=tk.X, pady=15)
 
         port_label = tk.Label(
             input_frame,
-            text="Chrome 偵錯端口:",
-            font=("Arial", 10),
-            bg="#f0f0f0",
-            fg="#333333",
+            text="web_click4 port:",
+            font=("Arial", 11),
+            bg=self.bg_color,
+            fg=self.text_color,
         )
         port_label.pack(side=tk.LEFT, padx=5)
 
         self.port_entry = tk.Entry(
-            input_frame, font=("Arial", 10), width=10, bd=2, relief=tk.GROOVE
+            input_frame, 
+            font=("Arial", 11), 
+            width=10, 
+            bd=0,
+            bg=self.accent_color,
+            fg=self.text_color,
+            insertbackground=self.text_color,  # 光標顏色
         )
-        self.port_entry.pack(side=tk.LEFT, padx=5)
+        self.port_entry.pack(side=tk.LEFT, padx=5, ipady=5)
 
         # 按鈕區域
-        button_frame = tk.Frame(self.main_frame, bg="#f0f0f0")
-        button_frame.pack(fill=tk.X, pady=10)
+        button_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        button_frame.pack(fill=tk.X, pady=15)
 
+        # 創建帥氣的按鈕風格 - 使用更深沉的顏色
         self.start_button = tk.Button(
             button_frame,
             text="開始執行",
             command=self.start_monitoring,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 10, "bold"),
+            bg=self.success_color,
+            fg=self.text_color,  # 使用白色文字
+            font=("Arial", 11, "bold"),
             width=12,
             height=1,
-            relief=tk.RAISED,
-            bd=2,
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2",  # 手型光標
         )
         self.start_button.pack(side=tk.LEFT, padx=10, expand=True)
 
@@ -91,14 +127,15 @@ class RecaptchaBypassGUI:
             button_frame,
             text="停止執行",
             command=self.stop_monitoring,
-            bg="#f44336",
-            fg="white",
-            font=("Arial", 10, "bold"),
+            bg=self.error_color,
+            fg=self.text_color,  # 使用白色文字
+            font=("Arial", 11, "bold"),
             width=12,
             height=1,
-            relief=tk.RAISED,
-            bd=2,
+            relief=tk.FLAT,
+            bd=0,
             state=tk.DISABLED,
+            cursor="hand2",  # 手型光標
         )  # 一開始設為禁用
         self.stop_button.pack(side=tk.LEFT, padx=10, expand=True)
 
@@ -106,24 +143,51 @@ class RecaptchaBypassGUI:
         status_frame = tk.LabelFrame(
             self.main_frame,
             text="執行狀態",
-            font=("Arial", 10, "bold"),
-            bg="#f0f0f0",
-            fg="#333333",
+            font=("Arial", 11, "bold"),
+            bg=self.bg_color,
+            fg=self.text_color,  # 改為白色
             padx=10,
             pady=10,
+            bd=1,
+            relief=tk.GROOVE,
         )
-        status_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        status_frame.pack(fill=tk.BOTH, expand=True, pady=15)
 
-        self.status_text = scrolledtext.ScrolledText(
-            status_frame,
+        # 創建文本框和滾動條
+        self.text_frame = tk.Frame(status_frame, bg=self.accent_color)
+        self.text_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 創建文本框
+        self.status_text = tk.Text(
+            self.text_frame,
             wrap=tk.WORD,
-            height=10,
-            font=("Consolas", 9),
-            bg="#ffffff",
-            fg="#333333",
+            height=12,
+            font=("Consolas", 10),
+            bg=self.accent_color,
+            fg=self.text_color,
+            insertbackground=self.text_color,
+            bd=0,
+            padx=5,
+            pady=5,
+            selectbackground="#505050",
+            selectforeground=self.text_color,
         )
-        self.status_text.pack(fill=tk.BOTH, expand=True)
-
+        
+        # 創建滾動條 - 使用ttk.Scrollbar以便應用自定義樣式
+        self.scrollbar = ttk.Scrollbar(
+            self.text_frame, 
+            orient="vertical", 
+            command=self.status_text.yview,
+            style="Dark.Vertical.TScrollbar"
+        )
+        
+        # 設置文本框的滾動命令 - 使用自定義函數確保滾動條始終顯示
+        self.status_text.configure(yscrollcommand=self._set_scrollbar)
+        
+        # 布局文本框和滾動條
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.status_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
         # 底部狀態列
         self.status_bar = tk.Label(
             self.main_frame,
@@ -131,9 +195,11 @@ class RecaptchaBypassGUI:
             bd=1,
             relief=tk.SUNKEN,
             anchor=tk.W,
-            font=("Arial", 8),
-            bg="#e0e0e0",
-            fg="#555555",
+            font=("Arial", 9),
+            bg=self.accent_color,
+            fg=self.text_color,
+            padx=5,
+            pady=3,
         )
         self.status_bar.pack(fill=tk.X, side=tk.BOTTOM, pady=5)
 
@@ -142,22 +208,17 @@ class RecaptchaBypassGUI:
         self.driver = None
         self.recaptchaSolver = None
 
-        # 在狀態文本中添加初始消息
-        self.log_message("歡迎使用 Recaptcha 自動驗證工具")
-        self.log_message("請輸入Chrome的偵錯端口，並點擊開始執行")
-        self.log_message("例如: 9222, 或從DevTools輸出獲取")
-
         # 綁定按鈕懸停效果
         self.start_button.bind(
-            "<Enter>", lambda e: self.start_button.config(bg="#45a049")
+            "<Enter>", lambda e: self.start_button.config(bg=self.hover_success)
         )
         self.start_button.bind(
-            "<Leave>", lambda e: self.start_button.config(bg="#4CAF50")
+            "<Leave>", lambda e: self.start_button.config(bg=self.success_color)
         )
         self.stop_button.bind(
             "<Enter>",
             lambda e: (
-                self.stop_button.config(bg="#d32f2f")
+                self.stop_button.config(bg=self.hover_error)
                 if self.stop_button["state"] == tk.NORMAL
                 else None
             ),
@@ -165,7 +226,7 @@ class RecaptchaBypassGUI:
         self.stop_button.bind(
             "<Leave>",
             lambda e: (
-                self.stop_button.config(bg="#f44336")
+                self.stop_button.config(bg=self.error_color)
                 if self.stop_button["state"] == tk.NORMAL
                 else None
             ),
@@ -209,7 +270,7 @@ class RecaptchaBypassGUI:
                     "debuggerAddress", f"127.0.0.1:{debug_port}"
                 )
                 driver = webdriver.Chrome(options=chrome_options)
-                self.queue_log_message(f"成功連接到 Chrome 實例 (Port: {debug_port})")
+                self.queue_log_message(f"成功連接到 web_click4 (Port: {debug_port})")
                 return driver
             except Exception as e:
                 self.queue_log_message(
@@ -412,11 +473,11 @@ class RecaptchaBypassGUI:
     def _auto_start_thread(self):
         """在新線程中執行自動啟動邏輯"""
         try:
-            self.log_message("正在啟動 web_click4 並等待端口...")
+            self.log_message("正在啟動 web_click4 ...")
             port = start_web_click_and_press_start()
 
             if port:
-                self.log_message(f"成功獲取端口：{port}")
+                self.log_message(f"成功抓取 port：{port}")
                 # 在主線程中更新 UI 和啟動監控
                 self.root.after(0, lambda: self._update_port_and_start(port))
             else:
@@ -435,6 +496,19 @@ class RecaptchaBypassGUI:
             self.start_monitoring()
         except Exception as e:
             self.log_message(f"更新端口並啟動時發生錯誤：{str(e)}")
+
+    def _set_scrollbar(self, first, last):
+        """自定義滾動條設置函數，確保滾動條始終顯示"""
+        # 正常設置滾動條位置
+        self.scrollbar.set(first, last)
+        
+        # 如果內容不需要滾動（first=0, last=1），則顯示假的滾動條
+        if float(first) <= 0.0 and float(last) >= 1.0:
+            # 顯示禁用狀態的滾動條
+            self.scrollbar.state(['disabled'])
+        else:
+            # 啟用滾動條
+            self.scrollbar.state(['!disabled'])
 
 
 def main():
@@ -457,6 +531,30 @@ def main():
 
     # 創建 tkinter 視窗
     root = tk.Tk()
+    
+    # 設定視窗無法調整大小
+    root.resizable(False, False)
+    
+    # 嘗試設定深色標題欄 (僅適用於某些 Windows 版本)
+    try:
+        root.tk.call('tk', 'windowingsystem')  # 檢查窗口系統
+        root.tk.call('::tk::unsupported::MacWindowStyle', 'style', root, 'dark')  # Mac 深色模式
+    except:
+        pass
+        
+    # 嘗試使用 Windows API 設定深色標題欄 (Windows 10/11)
+    try:
+        if os.name == "nt":
+            root.update_idletasks()  # 確保窗口已創建
+            hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+            # 嘗試設定深色模式
+            DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, 
+                ctypes.byref(ctypes.c_int(1)), ctypes.sizeof(ctypes.c_int)
+            )
+    except:
+        pass
 
     # 嘗試直接設定 taskbar 圖示
     try:
