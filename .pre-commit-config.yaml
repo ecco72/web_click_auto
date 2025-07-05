@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0  # 使用的版本
+    hooks:
+      - id: trailing-whitespace        # 移除行尾多餘空白
+      - id: end-of-file-fixer          # 確保檔案以換行結尾
+      - id: check-yaml                 # 檢查 YAML 格式是否正確
+      - id: check-json                 # 檢查 JSON 格式是否正確
+      - id: check-added-large-files   # 防止加入過大的檔案（預設100KB）
+
+  - repo: https://github.com/psf/black
+    rev: 24.4.2
+    hooks:
+      - id: black
+        language_version: python3  # 可依需求指定版本，如 python3.11
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        additional_dependencies: [flake8-bugbear]
+
+default_language_version:
+  python: python3
