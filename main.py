@@ -13,12 +13,27 @@ import threading
 from queue import Queue
 from start_web_click import start_web_click_and_press_start
 
+# 嘗試導入win32模組以支持鎖定畫面執行
+try:
+    import win32gui
+    import win32con
+    import win32api
+    import win32security
+    import win32process
+    WIN32_AVAILABLE = True
+except ImportError:
+    WIN32_AVAILABLE = False
+    print("警告: win32 模組不可用，某些功能可能受限")
+
 
 class RecaptchaBypassGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("全自動輔助")
-        self.root.geometry("450x550")
+        self.root.title("Web Click Auto")
+        self.root.geometry("450x600")
+        
+        # 啟用鎖定畫面執行權限
+        self.enable_lock_screen_execution()
         
         # 定義主題顏色 - 更深沉的黑色主題
         self.bg_color = "#121212"  # 深黑色背景
@@ -72,12 +87,34 @@ class RecaptchaBypassGUI:
         # 標題 - 改用白色文字
         title_label = tk.Label(
             self.main_frame,
-            text="全自動輔助",
+            text="Web Click Auto",
             font=("Arial", 18, "bold"),
             bg=self.bg_color,
             fg=self.text_color,
         )
         title_label.pack(pady=10)
+
+        # 狀態指示器
+        status_indicator_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        status_indicator_frame.pack(fill=tk.X, pady=5)
+        
+        self.lock_status_label = tk.Label(
+            status_indicator_frame,
+            text="螢幕狀態: 檢測中...",
+            font=("Arial", 10),
+            bg=self.bg_color,
+            fg=self.text_color,
+        )
+        self.lock_status_label.pack(side=tk.LEFT)
+        
+        self.permission_status_label = tk.Label(
+            status_indicator_frame,
+            text="權限狀態: " + ("已啟用" if WIN32_AVAILABLE else "受限"),
+            font=("Arial", 10),
+            bg=self.bg_color,
+            fg=self.success_color if WIN32_AVAILABLE else self.error_color,
+        )
+        self.permission_status_label.pack(side=tk.RIGHT)
 
         # 端口輸入區域
         input_frame = tk.Frame(self.main_frame, bg=self.bg_color)
@@ -85,7 +122,7 @@ class RecaptchaBypassGUI:
 
         port_label = tk.Label(
             input_frame,
-            text="web_click4 port:",
+            text="web_click5 port:",
             font=("Arial", 11),
             bg=self.bg_color,
             fg=self.text_color,
@@ -251,8 +288,96 @@ class RecaptchaBypassGUI:
         self.log_queue = Queue()
         self.status_update_queue = Queue()
 
+        # 啟動狀態監控
+        self.start_status_monitoring()
+
+        # 啟動隊列檢查
+        self.check_queue()
+
         # 添加自動啟動功能
         self.auto_start()
+
+    def enable_lock_screen_execution(self):
+        """啟用鎖定畫面執行的權限設置"""
+        if not WIN32_AVAILABLE:
+            return False
+        
+        try:
+            # 設置進程優先級
+            handle = win32api.GetCurrentProcess()
+            win32process.SetPriorityClass(handle, win32process.HIGH_PRIORITY_CLASS)
+            
+            # 嘗試獲取更多權限
+            try:
+                token = win32security.OpenProcessToken(
+                    win32api.GetCurrentProcess(),
+                    win32security.TOKEN_ADJUST_PRIVILEGES | win32security.TOKEN_QUERY
+                )
+                privilege = win32security.LookupPrivilegeValue(None, win32security.SE_DEBUG_NAME)
+                win32security.AdjustTokenPrivileges(
+                    token, 0, [(privilege, win32security.SE_PRIVILEGE_ENABLED)]
+                )
+                print("已啟用高級權限")
+            except Exception as e:
+                print(f"啟用高級權限失敗: {e}")
+            
+            return True
+        except Exception as e:
+            print(f"設置執行權限失敗: {e}")
+            return False
+
+    def is_screen_locked(self):
+        """檢測螢幕是否被鎖定"""
+        if not WIN32_AVAILABLE:
+            return False
+        
+        try:
+            # 檢查是否有鎖定畫面相關的窗口
+            def enum_windows_callback(hwnd, windows):
+                try:
+                    window_text = win32gui.GetWindowText(hwnd)
+                    class_name = win32gui.GetClassName(hwnd)
+                    if any(keyword in window_text.lower() for keyword in ['lock', 'logon', 'winlogon']):
+                        windows.append((hwnd, window_text, class_name))
+                    if any(keyword in class_name.lower() for keyword in ['lock', 'logon', 'winlogon']):
+                        windows.append((hwnd, window_text, class_name))
+                except:
+                    pass
+                return True
+            
+            lock_windows = []
+            win32gui.EnumWindows(enum_windows_callback, lock_windows)
+            
+            return len(lock_windows) > 0
+        except Exception as e:
+            print(f"檢測鎖定畫面失敗: {e}")
+            return False
+
+    def start_status_monitoring(self):
+        """啟動狀態監控"""
+        def update_status():
+            try:
+                # 檢查螢幕鎖定狀態
+                if self.is_screen_locked():
+                    self.lock_status_label.config(
+                        text="螢幕狀態: 已鎖定 (仍可執行)",
+                        fg=self.error_color
+                    )
+                else:
+                    self.lock_status_label.config(
+                        text="螢幕狀態: 未鎖定",
+                        fg=self.success_color
+                    )
+            except Exception as e:
+                self.lock_status_label.config(
+                    text=f"螢幕狀態: 檢測失敗",
+                    fg=self.error_color
+                )
+            
+            # 每5秒檢查一次
+            self.root.after(5000, update_status)
+        
+        update_status()
 
     def log_message(self, message):
         import datetime
@@ -270,7 +395,7 @@ class RecaptchaBypassGUI:
                     "debuggerAddress", f"127.0.0.1:{debug_port}"
                 )
                 driver = webdriver.Chrome(options=chrome_options)
-                self.queue_log_message(f"成功連接到 web_click4 (Port: {debug_port})")
+                self.queue_log_message(f"成功連接到 web_click5 (Port: {debug_port})")
                 return driver
             except Exception as e:
                 self.queue_log_message(
@@ -290,31 +415,70 @@ class RecaptchaBypassGUI:
             self.queue_log_message(f"解決驗證碼時發生錯誤：{str(e)}")
 
     def check_for_dialog(self):
-        """非阻塞版本的對話框檢測"""
+        """增強的對話框檢測，支持鎖定畫面"""
+        dialog_found = False
+        
+        # 方法1: 標準檢測
         try:
             dialog = Desktop(backend="uia").window(title="警告")
             if dialog.exists():
+                dialog_found = True
                 self.queue_log_message("檢測到警告對話框")
-                dialog.set_focus()
-                time.sleep(0.1)
-                try:
-                    ok_button = dialog.child_window(title="確定", control_type="Button")
-                    if ok_button.exists():
-                        ok_button.click()
-                        self.queue_log_message("已點擊確定按鈕")
-                    else:
-                        pyautogui.press("enter")
-                        self.queue_log_message("未找到確定按鈕，已按下 Enter 鍵")
-                except Exception as e:
-                    pyautogui.press("enter")
-                    self.queue_log_message(f"點擊按鈕失敗，已按下 Enter 鍵: {str(e)}")
-
-                self.solve_captcha()
-                return True
+                self._handle_dialog(dialog)
         except Exception as e:
-            self.queue_log_message(f"檢測對話框時發生錯誤：{str(e)}")
+            self.queue_log_message(f"標準對話框檢測失敗: {str(e)}")
+        
+        # 方法2: 通過窗口枚舉檢測（支持鎖定畫面）
+        if not dialog_found and WIN32_AVAILABLE:
+            try:
+                def enum_windows_callback(hwnd, dialogs):
+                    try:
+                        window_text = win32gui.GetWindowText(hwnd)
+                        if "警告" in window_text and win32gui.IsWindowVisible(hwnd):
+                            dialogs.append(hwnd)
+                    except:
+                        pass
+                    return True
+                
+                dialogs = []
+                win32gui.EnumWindows(enum_windows_callback, dialogs)
+                
+                if dialogs:
+                    dialog_found = True
+                    self.queue_log_message("通過窗口枚舉檢測到警告對話框")
+                    # 激活對話框並發送Enter鍵
+                    for hwnd in dialogs:
+                        try:
+                            win32gui.SetForegroundWindow(hwnd)
+                            time.sleep(0.1)
+                            pyautogui.press("enter")
+                            self.queue_log_message("已處理警告對話框")
+                        except Exception as e:
+                            self.queue_log_message(f"處理對話框失敗: {e}")
+            except Exception as e:
+                self.queue_log_message(f"窗口枚舉檢測失敗: {str(e)}")
+        
+        if dialog_found:
+            self.solve_captcha()
+            return True
 
         return False
+
+    def _handle_dialog(self, dialog):
+        """處理對話框"""
+        try:
+            dialog.set_focus()
+            time.sleep(0.1)
+            ok_button = dialog.child_window(title="確定", control_type="Button")
+            if ok_button.exists():
+                ok_button.click()
+                self.queue_log_message("已點擊確定按鈕")
+            else:
+                pyautogui.press("enter")
+                self.queue_log_message("未找到確定按鈕，已按下 Enter 鍵")
+        except Exception as e:
+            pyautogui.press("enter")
+            self.queue_log_message(f"點擊按鈕失敗，已按下 Enter 鍵: {str(e)}")
 
     def check_for_dialog2(self):
         """非阻塞版本的對話框檢測"""
@@ -387,20 +551,19 @@ class RecaptchaBypassGUI:
             while not self.log_queue.empty():
                 message = self.log_queue.get_nowait()
                 self.log_message(message)
-        except Exception as e:
-            self.queue_log_message(f"處理日誌隊列時出錯: {str(e)}")
+        except:
+            pass
 
         # 處理狀態欄更新
         try:
             while not self.status_update_queue.empty():
                 status = self.status_update_queue.get_nowait()
                 self.status_bar.config(text=status)
-        except Exception as e:
-            self.queue_log_message(f"處理狀態更新隊列時出錯: {str(e)}")
+        except:
+            pass
 
-        # 如果仍在運行，繼續檢查隊列
-        if self.running:
-            self.root.after(100, self.check_queue)
+        # 總是繼續檢查隊列，不管是否在運行
+        self.root.after(100, self.check_queue)
 
     def start_monitoring(self):
         if not self.port_entry.get():
@@ -458,8 +621,7 @@ class RecaptchaBypassGUI:
         try:
             self.driver.quit()
         except Exception as e:
-            if self.log_callback:
-                self.queue_log_message(f"關閉驅動程式時出錯: {str(e)}")
+            self.queue_log_message(f"關閉驅動程式時出錯: {str(e)}")
         self.driver = None
 
     def auto_start(self):
@@ -473,17 +635,17 @@ class RecaptchaBypassGUI:
     def _auto_start_thread(self):
         """在新線程中執行自動啟動邏輯"""
         try:
-            self.log_message("正在啟動 web_click4 ...")
-            port = start_web_click_and_press_start()
+            self.queue_log_message("正在啟動 web_click5 (增強版)...")
+            port = start_web_click_and_press_start(log_callback=self.queue_log_message)
 
             if port:
-                self.log_message(f"成功抓取 port：{port}")
+                self.queue_log_message(f"成功抓取 port：{port}")
                 # 在主線程中更新 UI 和啟動監控
                 self.root.after(0, lambda: self._update_port_and_start(port))
             else:
-                self.log_message("無法獲取端口，請手動輸入")
+                self.queue_log_message("無法獲取端口，請手動輸入")
         except Exception as e:
-            self.log_message(f"自動啟動失敗：{str(e)}")
+            self.queue_log_message(f"自動啟動失敗：{str(e)}")
 
     def _update_port_and_start(self, port):
         """更新端口輸入框並自動開始監控"""

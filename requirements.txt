@@ -4,3 +4,6 @@ selenium
 pywinauto
 pyautogui
 SpeechRecognition
+pywin32
+psutil
+requests

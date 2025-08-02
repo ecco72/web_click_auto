@@ -1,2 +1,2 @@
-# auto_web_click
+# web_click_auto
 Bypass reCAPTCHA
